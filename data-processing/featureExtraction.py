@@ -26,10 +26,8 @@ def writeTmpFile(record):
         print("can not write the temp record!")
 
 def deleteTmpFile(record):
-    #path = os.getcwd()
     try:
-        os.remove(record)#path+record)#file name is main.py=7
-        #os.remove(path+record)
+        os.remove(record)
     except:
         print(record)
         print("can not remove the temp record")
@@ -37,9 +35,6 @@ def deleteTmpFile(record):
 for i in range(0, len(patientRecords), 2):
 
         if len(patientRecords[i]['file_name']) == 32 and 'layout' not in patientRecords[i]['file_name']:
-            #print(">>>>>>> ",patientRecords[i]['file_name'][-16:])
-            #print(">>>>>>> ",patientRecords[i+1]['file_name'][-16:]) 
-
             writeTmpFile(patientRecords[i])
             if  'layout' not in patientRecords[i+1]['file_name']:
                 writeTmpFile(patientRecords[i+1])
@@ -64,8 +59,6 @@ for i in range(0, len(patientRecords), 2):
             # preprocessing: nan to 0 for missing signals in HR
             heart_rate_wfdb = [0 if math.isnan(x) else x for x in heart_rate_wfdb] # preprocessing: nan -> 0
 
-
-            #print(seg_count, ' ... ',len(heart_rate_wfdb))
             heart_rate+=heart_rate_wfdb
 
             if len(heart_rate_wfdb)>200:
@@ -97,8 +90,7 @@ def TestFeatureExtraction(patientRecords,segmentLength):
     heart_rate = []
     i=0
     for i in range(0, len(patientRecords), 2):
-
-            #if len(patientRecords[i]['file_name']) == 32 and 'layout' not in patientRecords[i]['file_name']:    
+   
             writeTmpFile(patientRecords[i])
             if  'layout' not in patientRecords[i+1]['file_name']:
                 writeTmpFile(patientRecords[i+1])
@@ -123,8 +115,6 @@ def TestFeatureExtraction(patientRecords,segmentLength):
             # preprocessing: nan to 0 for missing signals in HR
             heart_rate_wfdb = [0 if math.isnan(x) else x for x in heart_rate_wfdb] # preprocessing: nan -> 0
 
-
-            #print(seg_count, ' ... ',len(heart_rate_wfdb))
             heart_rate+=heart_rate_wfdb
 
             if len(heart_rate_wfdb)>200:
@@ -176,9 +166,6 @@ def main():
 
     client = boto3.client('s3')
     patientInfoObj = client.get_object(Bucket=bucket, Key='PATIENTS.csv')
-    #body = patientInfoObj['Body']
-    #patientInfo = body.read().decode('utf-8')
-    #df = pd.read_csv(StringIO(patientInfo))
 
     pn=0
 
@@ -186,14 +173,9 @@ def main():
     for patient in patientList:
         for object_summary in my_bucket.objects.filter(Prefix=patient):
             patientRecord = {}
-            #patientRecord['patient_ID'] = patient[-7:-1]
             patientRecord['file_name']=object_summary.key
-            #print(patientRecord['file_name'])
             patientRecord['body']=object_summary.get()['Body'].read()
             patientRecords.append(patientRecord)
-            #print("s3a://mimic3waveforms3"+str(patientList[0])+"*.hea")
-            #patientRecords = sc.textFile("s3a://mimic3waveforms3/"+str(patientList[0])+"*.hea")
-            #print(patientRecords_key)
             print("Patient Record:",patientRecord['file_name'])
         patientId =int(patient[-7:-1])
         mortality = (df[df['SUBJECT_ID']==patientId]['EXPIRE_FLAG'])
