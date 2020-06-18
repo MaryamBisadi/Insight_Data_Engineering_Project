@@ -1,80 +1,123 @@
-from pyspark.sql import SQLContext
-from pyspark import SparkConf, SparkContext
+from pyspark.sql.types import *
+import configparser
+from pyspark import SQLContext
 from pyspark.sql import SparkSession
-from pyspark.ml import Pipeline
-from pyspark.mllib.tree import RandomForest
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.ml.classification import RandomForestClassifier
+import pandas
 
-from pyspark.ml.feature import VectorIndexer
-from pyspark.mllib.linalg import Vectors
-from pyspark.mllib.regression import LabeledPoint
+def DB_connection():
 
-def Training(spark):
-    #df = spark.read.csv('s3a://mimic3waveforms3/TrainingFeatures.csv',inferSchema=True)
-    #df.describe().show()
+    DBproperties = {}
 
-    data = [LabeledPoint(0.0, [0.0]),LabeledPoint(1.0, [1.0]),LabeledPoint(3.0, [2.0]),LabeledPoint(2.0, [3.0]) ]
-
-    #trainingData = df.rdd.map(lambda row: LabeledPoint(row[-1], Vectors.dense(row[0:-1])))
-
-    # Train a RandomForest model.
-    #  Empty categoricalFeaturesInfo indicates all features are continuous.
-    #  Note: Use larger numTrees in practice.
-    #  Setting featureSubsetStrategy="auto" lets the algorithm choose.
-    model = RandomForest.trainRegressor(sc.parallelize(data), categoricalFeaturesInfo={},\
-                                        numTrees=6, featureSubsetStrategy="auto",\
-                                        impurity='variance', maxDepth=4, maxBins=32)
-    return model
-
-def Prediction(spark, model):
-    #df = spark.read.csv('s3a://mimic3waveforms3/TestFeatures/*.csv',inferSchema=True)
-    #df = spark.read.csv('s3a://mimic3waveforms3/TestFeatures/TestFeatures_000033.csv',inferSchema=True)
-    #df.describe().show()
-
-    data = [LabeledPoint(0.0, [0.0]),LabeledPoint(1.0, [1.0]),LabeledPoint(3.0, [2.0]),LabeledPoint(2.0, [3.0]) ]
+    config = configparser.ConfigParser()
+    config.read("database.ini")
+    dbProp = config['postgresql']
+    dbUrl= dbProp['url']
+    DBproperties['user']=dbProp['user']
+    DBproperties['password']=dbProp['password']
+    DBproperties['driver']=dbProp['driver']
+    return DBproperties, dbUrl
 
 
-    #testData = df.rdd.map(lambda row: LabeledPoint(row[-1], Vectors.dense(row[0:-1])))
-    predictions = model.predict(sc.parallelize(data).map(lambda x: x.features))
-    #print(predictions.collect())
-    labelsPredictions = sc.parallelize(data).map(lambda x: x.label).zip(predictions)#testData.map(lambda x: x.label).zip(predictions)
-    acc = labelsPredictions.filter(lambda x: x[0] == x[1]).count() / float(testData.count())
-    #print(labelsPredictions.collect())
+def Transfer_to_DB(spark, df):
+    #Create PySpark DataFrame Schema
+    r_schema = StructType([StructField('id',IntegerType(),True)\
+                        ,StructField('h1',DoubleType(),True)\
+                        ,StructField('h2',DoubleType(),True)\
+                        ,StructField('h3',DoubleType(),True)\
+                        ,StructField('h4',DoubleType(),True)\
+                        ,StructField('h5',DoubleType(),True)\
+                        ,StructField('h6',DoubleType(),True)\
+                        ,StructField('h7',DoubleType(),True)\
+                        ,StructField('h8',DoubleType(),True)\
+                        ,StructField('h9',DoubleType(),True)\
+                        ,StructField('h10',DoubleType(),True)\
+                        ,StructField('h11',DoubleType(),True)\
+                        ,StructField('h12',DoubleType(),True)\
+                        ,StructField('services',StringType(),True)])
 
-    #labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
-    #testMSE = labelsAndPredictions.map(lambda lp: (lp[0] - lp[1]) * (lp[0] - lp[1])).sum()/float(testData.count())
-    print('########### Model Accuracy = ',str(acc)) #+ str(testMSE))
-    print('\n###########Learned regression forest model:')
-    print(model.toDebugString())
-    def main(spark):
+    sqlContext = SQLContext(spark)
+    #Create Spark DataFrame from Pandas
+    df_record = sqlContext.createDataFrame(df, r_schema)
+    #Important to order columns in the same order as the target database
+    df_record  = df_record.select("id","h1","h2","h3","h4","h5","h6",\
+                                  "h7","h8","h9","h10","h11","h12","services")
+    df_record.show()
+    properties, url = DB_connection()
+    df_record.write.jdbc(url=url,table='patient_records',mode='append',properties=properties)
 
-    model = Training(spark)
-    Prediction(spark, model)
+    
+def ML_Module(spark):
+
+    bucket_train = 's3a://mimic3waveforms3/TrainFeatures/*.csv'#'s3a://mimic3waveforms3/TrainingFeatures.csv'
+    bucket_predict = 's3a://mimic3waveforms3/PredictFeatures/*'#'s3a://mimic3waveforms3/TestFeatures/*.csv'
+
+    # Create dataFrame for training features
+    df_train = spark.read.csv(bucket_train, inferSchema = True).toDF('MIN',\
+                    'MAX',\
+                    'MEAN',\
+                    'MEDIAN',\
+                    'MODE',\
+                    'STD',\
+                    'KURTOSIS',\
+                    'label',\
+                    'PATIENTID').cache()
+    vector_assembler = VectorAssembler(inputCols=['MIN','MAX','MEAN','MEDIAN','MODE','STD','KURTOSIS'],outputCol="features")
+    df_train_features = vector_assembler.transform(df_train).drop('MIN','MAX','MEAN','MEDIAN','MODE','STD','KURTOSIS','PATIENTID')
+    #df_train_features = df_temp.drop('MIN','MAX','MEAN','MEDIAN','MODE','STD','KURTOSIS','PATIENTID')
+    print('\n Train Features: ', df_train_features.count)
+    df_train_features.show(df_train_features.count(),False)
+    print("++++++++++++++++++++++Prediction+++++++++++++++++++++++")
+    # Create dataFrame for prediction features
+    df_predict = spark.read.csv(bucket_predict, inferSchema = True).toDF('MIN',\
+                    'MAX',\
+                    'MEAN',\
+                    'MEDIAN',\
+                    'MODE',\
+                    'STD',\
+                    'KURTOSIS',\
+                    'label',\
+                    'PATIENTID').cache()
+    df_predict = df_predict.filter('PATIENTID>0')
+    df_predict_features = vector_assembler.transform(df_predict).drop('MIN','MAX','MEAN','MEDIAN','MODE','STD','KURTOSIS')
+    df_predict_features.show()
+    print('\n Prediction Features: ', df_predict_features.count)
+    df_predict_features.show(df_predict_features.count(),False)
+
+    rf = RandomForestClassifier(labelCol="label", featuresCol="features")
+    model = rf.fit(df_train_features)
+
+    predictions = model.transform(df_predict_features)
+    predictions.show(predictions.count(),False)
+
+    results = predictions.select('PATIENTID','probability')
+    df = results.toPandas()
+    df['probability'] = df['probability'].apply(lambda col: col[0])
+
+    df2 = df.groupby(df['PATIENTID'])['probability'].apply(list).reset_index(name='h')
+    for i in range(12):
+        df2['h'+str(i+1)] = df2['h'].apply(lambda col: col[i])
+        df2['h'+str(i+1)] = df2['h'+str(i+1)].apply(lambda x: round(x*100)/100)
+    del df2['h']
+
+    df2['services'] = 'Test'
+    df2.rename(columns={'PATIENTID':'id'}, inplace = True)
+    return df2
 
 if __name__ == "__main__":
-    conf = SparkConf().setMaster("spark://ec2-52-8-238-139.us-west-1.compute.amazonaws.com:7077").setAppName("Mortality Prediction")
-    sc = SparkContext(conf = conf)
 
     spark = SparkSession.builder \
-        .master("spark://ec2-52-8-238-139.us-west-1.compute.amazonaws.com:7077") \
-        .appName("Mortality Prediction") \
-        .getOrCreate()
+                        .master('spark://ec2-13-57-198-186.us-west-1.compute.amazonaws.com:7077') \
+                        .appName('Mortality Prediction') \
+                        .getOrCreate()
 
-    SparkSession.builder.config(conf=conf)
-    '''
-    sqlContext = SQLContext(sc)
-    #df = sqlContext.read.format("s3:mimic3waveforms3")
-    df = spark.read.csv('s3://"mimic3waveforms3"/PATIENTS.csv',\
-        header=True,\
-        schema=schema,\
-        multiLine=True,\
-        quote='"',\
-        escape='"')
-    
-    df.describe().show()
-    '''
-    # execute only if run as a script
-    print("\n************Feature Extraction...\n")
-    main(spark)
-    print("\n*************Finish.\n")
+    df = ML_Module(spark)
+    Transfer_to_DB(spark, df)
 
-    spark.stop()
+spark.stop()
+
+
+                                                                                                                                                                                                  118,1         68%
