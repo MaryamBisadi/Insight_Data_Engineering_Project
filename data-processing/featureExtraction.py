@@ -7,22 +7,21 @@ import os
 import boto3
 import wfdb, wfdb.processing
 import math
-import ntpath
 import numpy as np
-from scipy import stats
 import pandas as pd
 import csv
 import threading
 
+# read patinet records from S3
 def readFromS3(bucket, prefix):
     patientList = []
     s3 = boto3.client('s3')
     result = s3.list_objects(Bucket=bucket, Prefix=prefix, Delimiter='/')
     for patient in result.get('CommonPrefixes'):
         patientList.append(patient.get('Prefix'))
-
     return patientList
 
+# write signal file and its header file to current path
 def writeTmpFile(record):
     try:
         f = open(record['file_name'][-16:], "wb")
@@ -30,14 +29,15 @@ def writeTmpFile(record):
         f.close()
     except:
         print("can not write the temp record!")
-
+# delete the files after HR extraction
 def deleteTmpFile(record):
     try:
         os.remove(record)
     except:
         print(record)
         print("can not remove the temp record")
-
+        
+# extract training features from heart signals
 def TrainFeatureExtraction(sqlContext, patientRecords, f_schema, mortality, patientId):
     f_min=-1
     f_max=-1
@@ -80,9 +80,8 @@ def TrainFeatureExtraction(sqlContext, patientRecords, f_schema, mortality, pati
             heart_rate_wfdb = [0.0 if math.isnan(x) else x for x in heart_rate_wfdb] # preprocessing: nan -> 0
 
             heart_rate+=heart_rate_wfdb
-            if len(heart_rate_wfdb)>200:
-                seg_count+=1
-
+                
+    # training feature extraction
     if len(heart_rate)>200:
         hr_schema = StructType([StructField("hr", FloatType(), True)])
         data = {'hr':heart_rate}
@@ -147,19 +146,12 @@ def TestFeatureExtraction(sqlContext, patientRecords, df_features, f_schema, mor
             # preprocessing: nan to 0 for missing signals in HR
             heart_rate_wfdb = [0.0 if math.isnan(x) else x for x in heart_rate_wfdb] # preprocessing: nan -> 0
 
-
             heart_rate+=heart_rate_wfdb
 
-            if len(heart_rate_wfdb)>200:
-                seg_count+=1
-
-            period = 50000 #15000
-
+            period = 450000
             if len(heart_rate) > period * 15:
                 break
-
-    features_list = []
-    #features_day = []
+    # test feature extraction for first 12 hours of patient satied in ICU 
     if len(heart_rate)>200: 
         hr_schema = StructType([StructField("hr", FloatType(), True)])
         for h in range(1,13):
@@ -203,9 +195,6 @@ def main(spark, i):
     patientRecords = []
     patientList = readFromS3(bucket, p)
 
-    # Ectract feature for training
-    features_train = []
-
     client = boto3.client('s3')
     patientInfoObj = client.get_object(Bucket=bucket, Key='PATIENTS.csv')
 
@@ -227,9 +216,7 @@ def main(spark, i):
     df = pd.read_csv(patientInfoObj['Body'])
 
     # for first 6 batch of records  extract train features
-
     for patient in patientList:
-
        patientRecords = []
        for object_summary in my_bucket.objects.filter(Prefix=patient):
           patientRecord = {}
@@ -262,10 +249,11 @@ if __name__ == "__main__":
     spark = SparkSession.builder \
                         .master('spark://ec2-52-8-238-139.us-west-1.compute.amazonaws.com:7077') \
                         .appName('Feature Extraction') \
-                        .config('spark.executors.memory', '4gb')\
-                        .config('spark.executor.cores, 3')\
+                        .config('spark.executors.memory', '30gb')\
+                        .config('spark.executor.cores, 7')\
                         .getOrCreate()
-
+    
+    # divided data to 9 batches and let each batch be proccessed by a thread
     for i in range(8):
         t = threading.Thread(target=main, args=(spark, i))
         t.start()
