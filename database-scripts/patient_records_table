@@ -1,0 +1,16 @@
+create table patient_records
+(
+  id    int,
+  h1    double,
+  h2    double,
+  h3    double,
+  h4    double,
+  h5    double,
+  h6    double,
+  h7    double,
+  h8    double,
+  h9    double,
+  h10   double,
+  h11   double,
+  h12   double,
+)
