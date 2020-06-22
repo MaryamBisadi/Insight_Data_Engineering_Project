@@ -1,8 +1,7 @@
 # Project-Title
 
 A ML model is used to predict ICU patient mortality using features extracted from the heart signals of ICU patients.
-
-![https://docs.google.com/presentation/d/1PUlbGhWOBNUF6f4VvrAzlr92MIoJXv3GRRsidV0lIU8/edit?usp=sharing](#) to your presentation.
+[Presentation Link](https://docs.google.com/presentation/d/1PUlbGhWOBNUF6f4VvrAzlr92MIoJXv3GRRsidV0lIU8/edit?usp=sharing)
 
 <hr/>
 
