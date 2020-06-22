@@ -20,7 +20,7 @@ In this project heart rate signals are used to predict mortality.
 ![Untitled drawing](https://user-images.githubusercontent.com/39537957/85251001-fae2db80-b40c-11ea-8c06-2f3dc033c687.jpg)
 
 ## Dataset
-MIMIC III Database
+MIMIC III waveform Database
 
 ## Engineering challenges
 Huge amount of binary data for waveform signals and missing signals in some records were part of the challenge I faced in this project. In a addition, current modules for extracting heart rate from signals are not designed for distributed systems. The module I used needs signal file and the related header file in current directory. So, I had to read signal and related header file from S3 and save it on EC2 to extract heart rate and delete it after processing. 
