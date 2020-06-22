@@ -17,7 +17,7 @@ Most of mortality prediction methods need clinical records. However, some of the
 In this project heart rate signals are used to predict mortality.
 
 ## Architecture
-![Screen Shot 2020-06-05 at 9 18 53 PM](https://user-images.githubusercontent.com/39537957/83935833-38d7d280-a772-11ea-8e66-d9b24902e505.png)
+![Untitled drawing](https://user-images.githubusercontent.com/39537957/85251001-fae2db80-b40c-11ea-8c06-2f3dc033c687.jpg)
 
 ## Dataset
 MIMIC III Database
