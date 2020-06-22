@@ -3,12 +3,6 @@
 A ML model is used to predict ICU patient mortality using features extracted from the heart signals of ICU patients.
 [Presentation Link](https://docs.google.com/presentation/d/1PUlbGhWOBNUF6f4VvrAzlr92MIoJXv3GRRsidV0lIU8/edit?usp=sharing)
 
-<hr/>
-
-## How to install and get it up and running
-To be able to process 2TB patient waveform signals for this project, we need a cluster of 6 EC2 m5ad.4xlarge for feature extraction and prediction and one  EC2 m4.large for postgresql.
-
-<hr/>
 
 ## Introduction
 Early hospital mortality prediction is critical to make efﬁcient medical decisions about the severely ill patients staying in intensive care units (ICUs).
