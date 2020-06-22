@@ -190,12 +190,16 @@ def main(spark, i):
     bucket = "mimic3waveforms3"
     p = '1.0/p0'+ str(i) +'/'
 
-    s3 = boto3.resource('s3')
-    my_bucket = s3.Bucket("mimic3waveforms3")
-    patientRecords = []
-    patientList = readFromS3(bucket, p)
+    session = boto3.session.Session()
+    client = session.client('s3')
+    s3 = session.resource('s3')
 
-    client = boto3.client('s3')
+    patientList = []
+    result = client.list_objects(Bucket=bucket, Prefix=p, Delimiter='/')
+    for patient in result.get('CommonPrefixes'):
+        patientList.append(patient.get('Prefix'))
+
+    my_bucket = s3.Bucket("mimic3waveforms3")
     patientInfoObj = client.get_object(Bucket=bucket, Key='PATIENTS.csv')
 
     f_schema = StructType([\
@@ -242,7 +246,7 @@ def main(spark, i):
 
       if i < 6: 
         df_features = df_features.filter(col('patient_id')>0)
-        df_features.write.csv("s3a://"+bucket+"/TrainFeatures")
+        df_features.write.csv("s3a://"+bucket+"/TrainFeatures/"+str(i))
 
 if __name__ == "__main__":
 
